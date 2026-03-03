@@ -1,0 +1,11 @@
+{
+  "id": "correlation-memory",
+  "name": "Memory (Correlation-Aware)",
+  "description": "Automatic correlation rule checking with memory search - provides multi-context retrieval for decision-making queries",
+  "kind": "memory",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
