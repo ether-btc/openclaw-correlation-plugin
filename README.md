@@ -1,44 +1,102 @@
 # OpenClaw Correlation Memory Plugin
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![OpenClaw Plugin](https://img.shields.io/badge/OpenClaw-Plugin-blue)](https://openclaw.dev)
+
 **Correlation-aware memory search for OpenClaw** — automatically retrieves related contexts when you query memory, so decisions are made with full information.
 
-## What It Does
+## Table of Contents
 
-When you search for "backup error", normal memory search returns backup-related results. This plugin checks correlation rules and *also* fetches "last backup time", "recovery procedures", and "similar errors" — because those contexts consistently matter together.
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Correlation Rules](#correlation-rules)
+- [Tools Provided](#tools-provided)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+- [Credits](#credits)
+
+## Overview
+
+The OpenClaw Correlation Plugin enhances memory search capabilities by automatically retrieving related contexts when querying memory. Traditional memory search returns results directly related to the query terms, but often misses contextual information that is crucial for making informed decisions.
+
+When you search for "backup error," normal memory search returns backup-related results. This plugin checks correlation rules and *also* fetches "last backup time," "recovery procedures," and "similar errors" — because those contexts consistently matter together.
 
 Think of it as **decision-context retrieval**: "for X decisions, always also consider Y."
 
-## Architecture
+## Features
 
-This is a merged plugin combining two previous approaches:
-- **SDK-native tool registration** (from `correlation-rules-mem`) — proper OpenClaw plugin lifecycle
-- **Rich matching logic** (from `correlation-memory`) — keyword matching, confidence filtering, lenient/strict modes
-
-### How It Works
-
-```
-User query → Match against correlation rules → Build additional search queries → Return enriched results
-```
-
-**Matching modes:**
-- `auto` (default) — keyword + context matching
-- `strict` — exact keyword match only
-- `lenient` — fuzzy matching for broad queries
+- **Automatic Context Retrieval**: Get related information without explicit requests
+- **Configurable Correlation Rules**: Define domain-specific relationships
+- **Confidence Scoring**: Weight correlations by certainty level
+- **Multiple Matching Modes**: Auto, strict, and lenient matching options
+- **Performance Optimized**: Caching and lazy evaluation for efficiency
+- **Extensible Architecture**: Easy to add new correlation types
+- **Debug Tools**: Understand why correlations are made
+- **Rollback Support**: Safe deployment with easy rollback procedures
 
 ## Installation
 
-```bash
-# Clone into OpenClaw extensions
-cd ~/.openclaw/extensions
-git clone https://github.com/ether-btc/openclaw-correlation-plugin.git correlation-memory
+### Prerequisites
 
-# Add to plugins.allow in openclaw.json
-# "plugins": { "allow": ["correlation-memory"] }
+- OpenClaw >= 2026.1.26
+- Node.js >= 18.x
+- Git
+
+### Steps
+
+1. Clone into OpenClaw extensions:
+   ```bash
+   cd ~/.openclaw/extensions
+   git clone https://github.com/ether-btc/openclaw-correlation-plugin.git correlation-memory
+   ```
+
+2. Install dependencies:
+   ```bash
+   cd ~/.openclaw/extensions/correlation-memory
+   npm install
+   ```
+
+3. Add to plugins.allow in your `openclaw.json`:
+   ```json
+   {
+     "plugins": {
+       "allow": ["correlation-memory"]
+     }
+   }
+   ```
+
+4. Restart OpenClaw gateway:
+   ```bash
+   openclaw gateway restart
+   ```
+
+## Usage
+
+### Basic Usage
+
+Once installed, the correlation plugin automatically enhances memory searches. No additional steps are required for basic functionality.
+
+### Manual Correlation Check
+
+Use the debug tool to see which rules match a given context:
+
+```bash
+openclaw exec correlation_check --context "config change"
 ```
 
-## Correlation Rules
+### Adjusting Sensitivity
 
-Rules live in `memory/correlation-rules.json` in your workspace:
+Control correlation sensitivity through confidence thresholds in your rules.
+
+## Configuration
+
+The plugin requires a correlation rules file at `memory/correlation-rules.json` in your workspace.
+
+### Example Configuration
 
 ```json
 {
@@ -50,37 +108,116 @@ Rules live in `memory/correlation-rules.json` in your workspace:
       "must_also_fetch": ["backup-location", "rollback-instructions"],
       "relationship_type": "constrains",
       "confidence": 0.95
+    },
+    {
+      "id": "cr-002",
+      "trigger_context": "error-handling",
+      "trigger_keywords": ["error", "exception", "failure"],
+      "must_also_fetch": ["similar-errors", "recovery-procedures", "contact-info"],
+      "relationship_type": "supports",
+      "confidence": 0.85
     }
   ]
 }
 ```
 
+## Correlation Rules
+
+### Rule Structure
+
+Each correlation rule consists of:
+
+- **id**: Unique identifier for the rule
+- **trigger_context**: Domain context where rule applies
+- **trigger_keywords**: Keywords that activate the rule
+- **must_also_fetch**: Related contexts to retrieve
+- **relationship_type**: Type of relationship (constrains, supports, etc.)
+- **confidence**: Confidence level (0.0 to 1.0)
+
 ### Rule Lifecycle
+
+Rules follow a lifecycle for safe deployment:
 `proposal` → `testing` → `validated` → `promoted` → `retired`
 
-Only `promoted` and rules without a lifecycle state are active by default.
+Only `promoted` rules and rules without a lifecycle state are active by default.
+
+### Matching Modes
+
+Three matching modes provide flexibility:
+- `auto` (default) — keyword + context matching
+- `strict` — exact keyword match only
+- `lenient` — fuzzy matching for broad queries
 
 ## Tools Provided
 
 ### `memory_search_with_correlation`
-Search memory with automatic correlation enrichment.
 
-### `correlation_check`  
+Search memory with automatic correlation enrichment. This tool is automatically used when performing memory searches.
+
+### `correlation_check`
+
 Debug tool — check which rules match a given context without performing searches.
 
-## Configuration
+Parameters:
+- `--context`: Context to check for matching rules
+- `--keywords`: Additional keywords to consider
+- `--mode`: Matching mode (auto, strict, lenient)
 
-No configuration needed. The plugin reads correlation rules from your workspace automatically.
+## Documentation
 
-## Requirements
+Comprehensive documentation is available in the docs directory:
 
-- OpenClaw >= 2026.1.26
-- Correlation rules file at `memory/correlation-rules.json`
+- [Research Background](./docs/research.md) - Theoretical foundation and related work
+- [Deployment Guide](./docs/deployment.md) - Installation, configuration, and troubleshooting
+- [Lessons Learned](./docs/lessons.md) - Development insights and best practices
+- [Contributing Guide](./CONTRIBUTING.md) - How to contribute to the project
+
+## Contributing
+
+Contributions are welcome! Please see our [Contributing Guide](./CONTRIBUTING.md) for details on:
+
+- Reporting issues
+- Suggesting enhancements
+- Code contributions
+- Contributing correlation rules
+- Development guidelines
+
+### Quick Start for Contributors
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Update documentation
+6. Submit a pull request
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
 
 ## Credits
 
+### Original Development
+
 Built by [Charon](https://github.com/ether-btc) — an OpenClaw agent running on a Raspberry Pi 5.
+
+### Research Inspiration
+
+- Coolmanns architecture for context-aware systems
+- Cognitive science research on contextual decision making
+- Information retrieval literature on query expansion
+
+### Contributors
+
+Thanks to all who have contributed to this project. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details on how to contribute.
+
+### Related Projects
+
+- [OpenClaw](https://github.com/ether-btc/openclaw) - The AI agent platform
+- Previous experimental implementations:
+  - `correlation-rules-mem` - Plugin lifecycle focus
+  - `correlation-memory` - Rich matching logic focus
+
+---
+
+*For more information about OpenClaw, visit [openclaw.dev](https://openclaw.dev)*
