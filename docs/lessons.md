@@ -159,3 +159,58 @@ Future improvements could include:
 The correlation plugin development was a valuable learning experience that highlighted the importance of iterative development, real-world testing, and user feedback. The challenges encountered with subagent failures, performance optimization, and user experience tuning provided crucial insights that will benefit future OpenClaw plugin development efforts.
 
 The key takeaway is that complex AI-enhanced systems require careful attention to reliability, transparency, and user control. Balancing automation with user agency remains a central challenge in building effective AI assistants.
+---
+
+## Additional Lessons: Memory System Fix (2026-03-18)
+
+### 1. ESM/CommonJS Incompatibility
+
+During memory system troubleshooting, we discovered a critical issue:
+- **Problem**: node-llama-cpp v3.x is ESM-only, but OpenClaw gateway uses CommonJS require()
+- **Error**: `ERR_REQUIRE_ASYNC_MODULE`
+- **Impact**: Memory search disabled, semantic embeddings unavailable
+
+**Lessons**:
+- Always check module system compatibility (ESM vs CJS) when integrating Node.js packages
+- File bugs early when dependencies have breaking changes
+- Maintain fallback mechanisms (FTS) for critical functionality
+
+### 2. Provider Configuration Discovery
+
+Troubleshooting revealed configuration complexity:
+- Multiple ways to configure API keys (env, credentials dir, auth.json, config)
+- Provider initialization depends on environment availability at gateway startup
+- Gateway restart is required for config changes to take effect
+
+**Lessons**:
+- Document configuration options clearly
+- Provide diagnostic tools to verify provider initialization
+- Use wrapper scripts for persistent environment variables
+
+### 3. Local vs Remote Embeddings
+
+We solved the embedding problem using local (Ollama) instead of remote (Voyage):
+- Installed Ollama with `nomic-embed-text` model
+- Configured `provider: "ollama"` in memorySearch
+- Result: Fully local semantic search, no API costs
+
+**Lessons**:
+- Local embeddings can be more reliable than remote APIs
+- Ollama provides a good alternative when ESM packages fail
+- Hybrid mode (semantic + FTS) provides redundancy
+
+### 4. Correlation Rules in Production
+
+Our extensive correlation rules (20+ rules) proved valuable:
+- Rules automatically enrich memory searches with context
+- Lifecycle states (proposal → testing → validated → promoted → retired) help manage rule quality
+- Usage tracking helps identify effective vs unused rules
+
+**Lessons**:
+- Invest in rule governance from the start
+- Track rule effectiveness through usage counts
+- Regular review cycles keep rules relevant
+
+---
+
+*Added: 2026-03-18*
