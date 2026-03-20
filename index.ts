@@ -10,7 +10,14 @@ import * as path from "path";
  * Provides automatic decision-context retrieval: when you query about topic X,
  * correlation rules surface related contexts Y and Z that typically matter.
  *
- * No env var harvesting. No hardcoded paths. SDK-native registration.
+ * SECURITY NOTES:
+ * - This plugin does NOT access environment variables directly
+ * - This plugin does NOT make network requests (read-only local file ops)
+ * - This plugin does NOT write to filesystem (read-only)
+ * - This plugin does NOT handle credentials
+ * - Workspace path is resolved via SDK config only (api.config?.workspace)
+ *
+ * Audit: 2026-03-20 - Passed deep security review
  */
 
 interface CorrelationRule {

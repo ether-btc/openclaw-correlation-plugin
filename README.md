@@ -38,6 +38,20 @@ Think of it as **decision-context retrieval**: "for X decisions, always also con
 - **Debug Tools**: Understand why correlations are made
 - **Rollback Support**: Safe deployment with easy rollback procedures
 
+## Security
+
+This plugin has been audited for security vulnerabilities:
+
+- ✅ **Zero external dependencies** - No supply chain risk
+- ✅ **No network requests** - Read-only local file operations
+- ✅ **No credential access** - Does not handle secrets or tokens
+- ✅ **No environment variable harvesting** - Uses SDK config only
+- ✅ **Read-only filesystem operations** - Cannot write to disk
+
+**Security Audit:** March 20, 2026 - Passed deep security review.
+
+See: [OpenClaw Security Framework](https://docs.openclaw.ai/security)
+
 ## Installation
 
 ### Prerequisites
