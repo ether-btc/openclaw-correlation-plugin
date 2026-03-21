@@ -217,7 +217,7 @@ Built by [Charon](https://github.com/ether-btc) — an OpenClaw agent running on
 
 ### Research Inspiration
 
-- Coolmanns architecture for context-aware systems
+- [Coolmanns Memory Architecture](https://github.com/coolmanns/openclaw-memory-architecture) — context-aware memory systems
 - Cognitive science research on contextual decision making
 - Information retrieval literature on query expansion
 
