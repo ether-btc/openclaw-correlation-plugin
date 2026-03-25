@@ -117,23 +117,39 @@ The plugin requires a correlation rules file at `memory/correlation-rules.json` 
   "rules": [
     {
       "id": "cr-001",
+      "created": "2026-03-25T00:00:00Z",
       "trigger_context": "config-change",
-      "trigger_keywords": ["config", "setting", "change"],
-      "must_also_fetch": ["backup-location", "rollback-instructions"],
+      "trigger_keywords": ["config", "setting", "openclaw.json", "modify", "jq", "change"],
+      "must_also_fetch": ["backup-location", "rollback-instructions", "recent-changes"],
       "relationship_type": "constrains",
-      "confidence": 0.95
+      "confidence": 0.95,
+      "lifecycle": {
+        "state": "validated"
+      },
+      "learned_from": "config-misconfiguration-leads-to-service-outage",
+      "usage_count": 11,
+      "notes": "Any config change should trigger a backup check and rollback plan."
     },
     {
       "id": "cr-002",
-      "trigger_context": "error-handling",
-      "trigger_keywords": ["error", "exception", "failure"],
-      "must_also_fetch": ["similar-errors", "recovery-procedures", "contact-info"],
-      "relationship_type": "supports",
-      "confidence": 0.85
+      "created": "2026-03-25T00:00:00Z",
+      "trigger_context": "error-debugging",
+      "trigger_keywords": ["error", "fail", "400", "bug", "broken", "crash"],
+      "must_also_fetch": ["recovery-procedures", "recent-changes", "similar-errors"],
+      "relationship_type": "diagnosed_by",
+      "confidence": 0.9,
+      "lifecycle": {
+        "state": "promoted"
+      },
+      "learned_from": "tool-call-errors-recur-without-context",
+      "usage_count": 14,
+      "notes": "Error debugging without recent changes context is guesswork."
     }
   ]
 }
 ```
+
+> **Tip:** See [`correlation-rules.example.json`](./correlation-rules.example.json) in the repo root for a full set of production-quality rules with detailed documentation.
 
 ## Correlation Rules
 
@@ -142,11 +158,16 @@ The plugin requires a correlation rules file at `memory/correlation-rules.json` 
 Each correlation rule consists of:
 
 - **id**: Unique identifier for the rule
+- **created**: ISO-8601 creation timestamp
 - **trigger_context**: Domain context where rule applies
 - **trigger_keywords**: Keywords that activate the rule
 - **must_also_fetch**: Related contexts to retrieve
 - **relationship_type**: Type of relationship (constrains, supports, etc.)
 - **confidence**: Confidence level (0.0 to 1.0)
+- **lifecycle**: State object with `state` field — see Rule Lifecycle below
+- **learned_from**: Descriptive name of the incident or pattern that prompted this rule
+- **usage_count**: How many times the rule has fired (for diagnostics)
+- **notes** (optional): Human-readable explanation of the rule's purpose
 
 ### Rule Lifecycle
 
@@ -184,6 +205,7 @@ Comprehensive documentation is available in the docs directory:
 - [Research Background](./docs/research.md) - Theoretical foundation and related work
 - [Deployment Guide](./docs/deployment.md) - Installation, configuration, and troubleshooting
 - [Lessons Learned](./docs/lessons.md) - Development insights and best practices
+- [Production Guide](./docs/production-guide.md) - **New:** Live deployment experience, heartbeat integration, confidence tuning, and operational best practices
 - [Contributing Guide](./CONTRIBUTING.md) - How to contribute to the project
 
 ## Contributing
