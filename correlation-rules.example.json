@@ -23,7 +23,7 @@
       "relationship_type": "constrains",
       "confidence": 0.95,
       "lifecycle": {
-        "state": "validated"
+        "state": "active"
       },
       "learned_from": "config-misconfiguration-leads-to-service-outage",
       "usage_count": 11,
@@ -47,7 +47,7 @@
       "relationship_type": "related_to",
       "confidence": 0.9,
       "lifecycle": {
-        "state": "validated"
+        "state": "active"
       },
       "learned_from": "backup-verification-failed-silently",
       "usage_count": 6,
@@ -73,7 +73,7 @@
       "relationship_type": "diagnosed_by",
       "confidence": 0.9,
       "lifecycle": {
-        "state": "promoted"
+        "state": "proposal"
       },
       "learned_from": "tool-call-errors-recur-without-context",
       "usage_count": 14,
@@ -99,7 +99,7 @@
       "relationship_type": "continues",
       "confidence": 0.95,
       "lifecycle": {
-        "state": "promoted"
+        "state": "active"
       },
       "learned_from": "session-handoff-without-context-loses-work",
       "usage_count": 9,
@@ -123,7 +123,7 @@
       "relationship_type": "constrains",
       "confidence": 0.99,
       "lifecycle": {
-        "state": "promoted"
+        "state": "active"
       },
       "learned_from": "gateway-restart-without-health-check-causes-downtime",
       "usage_count": 5,
@@ -172,7 +172,7 @@
       "relationship_type": "requires",
       "confidence": 0.95,
       "lifecycle": {
-        "state": "validated"
+        "state": "active"
       },
       "learned_from": "workspace-file-loss-during-branch-switch",
       "usage_count": 4,
