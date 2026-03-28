@@ -4,7 +4,7 @@
   "description": "Production-quality example correlation rules for OpenClaw correlation-memory plugin. These rules demonstrate the extended schema with lifecycle states, learned_from attribution, and realistic confidence scores. Adapt for your own deployment.",
   "rules": [
     {
-      "id": "cr-001",
+      "id": "cr-config-001",
       "created": "2026-03-25T00:00:00Z",
       "trigger_context": "config-change",
       "trigger_keywords": [
@@ -23,14 +23,14 @@
       "relationship_type": "constrains",
       "confidence": 0.95,
       "lifecycle": {
-        "state": "active"
+        "state": "promoted"
       },
       "learned_from": "config-misconfiguration-leads-to-service-outage",
       "usage_count": 11,
       "notes": "Any config change should trigger a backup check and rollback plan. Confidence is high because config errors are costly and predictable."
     },
     {
-      "id": "cr-002",
+      "id": "cr-error-001",
       "created": "2026-03-25T00:00:00Z",
       "trigger_context": "backup-operation",
       "trigger_keywords": [
@@ -47,14 +47,14 @@
       "relationship_type": "related_to",
       "confidence": 0.9,
       "lifecycle": {
-        "state": "active"
+        "state": "promoted"
       },
       "learned_from": "backup-verification-failed-silently",
       "usage_count": 6,
       "notes": "Backups are only reliable if you verify them. Always fetch last-backup-time to know if a backup actually ran."
     },
     {
-      "id": "cr-003",
+      "id": "cr-session-001",
       "created": "2026-03-25T00:00:00Z",
       "trigger_context": "error-debugging",
       "trigger_keywords": [
@@ -80,7 +80,7 @@
       "notes": "Error debugging without recent changes context is guesswork. Promoted because this fires often and always helps."
     },
     {
-      "id": "cr-004",
+      "id": "cr-backup-001",
       "created": "2026-03-25T00:00:00Z",
       "trigger_context": "session-recovery",
       "trigger_keywords": [
@@ -99,14 +99,14 @@
       "relationship_type": "continues",
       "confidence": 0.95,
       "lifecycle": {
-        "state": "active"
+        "state": "promoted"
       },
       "learned_from": "session-handoff-without-context-loses-work",
       "usage_count": 9,
       "notes": "Session recovery is only useful if you know what was in progress. Always fetch current-work and next-actions."
     },
     {
-      "id": "cr-005",
+      "id": "cr-gateway-001",
       "created": "2026-03-25T00:00:00Z",
       "trigger_context": "gateway-operations",
       "trigger_keywords": [
@@ -123,14 +123,14 @@
       "relationship_type": "constrains",
       "confidence": 0.99,
       "lifecycle": {
-        "state": "active"
+        "state": "promoted"
       },
       "learned_from": "gateway-restart-without-health-check-causes-downtime",
       "usage_count": 5,
       "notes": "Gateway operations are high-stakes. Confidence near 1.0 because getting this wrong means total service loss."
     },
     {
-      "id": "cr-006",
+      "id": "cr-plugin-001",
       "created": "2026-03-25T00:00:00Z",
       "trigger_context": "plugin-management",
       "trigger_keywords": [
@@ -155,7 +155,7 @@
       "notes": "Plugin changes can crash the gateway. Always validate and have rollback ready."
     },
     {
-      "id": "cr-007",
+      "id": "cr-git-001",
       "created": "2026-03-25T00:00:00Z",
       "trigger_context": "git-operations",
       "trigger_keywords": [
@@ -172,14 +172,14 @@
       "relationship_type": "requires",
       "confidence": 0.95,
       "lifecycle": {
-        "state": "active"
+        "state": "promoted"
       },
       "learned_from": "workspace-file-loss-during-branch-switch",
       "usage_count": 4,
       "notes": "Switching branches with uncommitted work risks data loss. Always check for uncommitted files first."
     },
     {
-      "id": "cr-008",
+      "id": "cr-security-001",
       "created": "2026-03-25T00:00:00Z",
       "trigger_context": "security-audit",
       "trigger_keywords": [

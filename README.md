@@ -29,14 +29,15 @@ Think of it as **decision-context retrieval**: "for X decisions, always also con
 
 ## Features
 
-- **Automatic Context Retrieval**: Get related information without explicit requests
-- **Configurable Correlation Rules**: Define domain-specific relationships
-- **Confidence Scoring**: Weight correlations by certainty level
+- **Word-Boundary Matching**: Keyword matching with regex word boundaries prevents false positives
+- **Confidence Filtering**: Filter and sort results by confidence threshold
 - **Multiple Matching Modes**: Auto, strict, and lenient matching options
-- **Performance Optimized**: Caching and lazy evaluation for efficiency
+- **Result Limiting**: `max_results` parameter prevents output bloat
+- **mtime Caching**: Rules cached in memory, refreshed only when file changes
+- **Multi-word Keywords**: Support for phrase keywords like "config change"
 - **Extensible Architecture**: Easy to add new correlation types
 - **Debug Tools**: Understand why correlations are made
-- **Rollback Support**: Safe deployment with easy rollback procedures
+- **Error Logging**: Failed rule loads are logged, not silently swallowed
 
 ## Security
 
@@ -174,14 +175,22 @@ Each correlation rule consists of:
 Rules follow a lifecycle for safe deployment:
 `proposal` → `testing` → `validated` → `promoted` → `retired`
 
-Only `promoted` rules and rules without a lifecycle state are active by default.
+The plugin accepts these states as active: `promoted`, `active`, `testing`, `validated`, `proposal`. Rules without a lifecycle state are also active. Use `retired` to disable rules without deleting them.
 
 ### Matching Modes
 
 Three matching modes provide flexibility:
-- `auto` (default) — keyword + context matching
-- `strict` — exact keyword match only
+- `auto` (default) — keyword + context matching (word-boundary aware)
+- `strict` — word-boundary keyword match only
 - `lenient` — fuzzy matching for broad queries
+
+### Confidence Filtering
+
+Both tools accept a `min_confidence` parameter (0-1, default: 0) to filter low-confidence matches. Results are sorted by confidence descending.
+
+### Result Limiting
+
+Both tools accept a `max_results` parameter (default: 10) to cap output size.
 
 ## Tools Provided
 
