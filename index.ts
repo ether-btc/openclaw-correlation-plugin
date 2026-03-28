@@ -43,25 +43,41 @@ interface MatchedRule {
   additional_searches: string[];
 }
 
-// ── Rule Loading ──────────────────────────────────────────────────────
+// ── Rule Loading (with mtime cache) ──────────────────────────────────
+
+let cachedRules: CorrelationRule[] | null = null;
+let cachedMtime = 0;
+
+const ACTIVE_STATES = new Set([
+  "promoted", "active", "testing", "validated", "proposal",
+]);
 
 function loadCorrelationRules(workspacePath: string): CorrelationRule[] {
-  const rulesPath = path.join(workspacePath, "memory/correlation-rules.json");
+  const rulesPath = path.resolve(
+    path.join(workspacePath, "memory/correlation-rules.json"),
+  );
+
   try {
-    if (!fs.existsSync(rulesPath)) return [];
+    const stat = fs.statSync(rulesPath);
+    if (cachedRules && stat.mtimeMs === cachedMtime) return cachedRules;
+
     const data = fs.readFileSync(rulesPath, "utf-8");
     const parsed = JSON.parse(data);
     const rules: CorrelationRule[] = parsed.rules || [];
 
     // Filter to active rules only
-    return rules.filter((rule) => {
+    const filtered = rules.filter((rule) => {
       if (!rule.id) return false;
       if (rule.confidence !== undefined && rule.confidence <= 0) return false;
       const state = rule.lifecycle?.state;
-      // Active if: promoted, testing, validated, proposal, or no lifecycle state
-      return !state || ["promoted", "testing", "validated", "proposal"].includes(state);
+      return !state || ACTIVE_STATES.has(state);
     });
-  } catch {
+
+    cachedRules = filtered;
+    cachedMtime = stat.mtimeMs;
+    return filtered;
+  } catch (err) {
+    console.error(`[correlation-memory] Failed to load rules from ${rulesPath}: ${err}`);
     return [];
   }
 }
@@ -99,37 +115,69 @@ function getAdditionalSearches(rule: CorrelationRule): string[] {
   return [...new Set(searches)]; // deduplicate
 }
 
+// ── Word-boundary matching ───────────────────────────────────────────
+
+const regexCache = new Map<string, RegExp>();
+
+function wordMatch(text: string, keyword: string): boolean {
+  // Multi-word keywords: all words must be present (word-boundary each)
+  if (keyword.includes(" ")) {
+    return keyword.split(/\s+/).every((word) => wordMatch(text, word));
+  }
+  let re = regexCache.get(keyword);
+  if (!re) {
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    re = new RegExp(`\\b${escaped}\\b`, "i");
+    regexCache.set(keyword, re);
+  }
+  return re.test(text);
+}
+
 // ── Matching Logic ────────────────────────────────────────────────────
+
+interface MatchOptions {
+  mode: "auto" | "strict" | "lenient";
+  minConfidence: number;
+  maxResults: number;
+}
 
 function matchRules(
   rules: CorrelationRule[],
   query: string,
-  mode: "auto" | "strict" | "lenient" = "auto",
+  options: Partial<MatchOptions> = {},
 ): MatchedRule[] {
-  const queryLower = query.toLowerCase();
+  const { mode = "auto", minConfidence = 0, maxResults = 10 } = options;
   const matched: MatchedRule[] = [];
   const seenIds = new Set<string>();
 
   for (const rule of rules) {
+    if (matched.length >= maxResults) break;
     const ruleId = rule.id || "unknown";
     if (seenIds.has(ruleId)) continue;
 
+    // Confidence gate
+    if (rule.confidence !== undefined && rule.confidence < minConfidence) continue;
+
     let isMatch = false;
 
-    // Keyword matching (auto + strict)
+    // Keyword matching with word boundaries (auto + strict)
     const keywords = getKeywords(rule);
     for (const kw of keywords) {
-      if (queryLower.includes(kw.toLowerCase())) {
+      if (wordMatch(query, kw)) {
         isMatch = true;
         break;
       }
     }
 
-    // Context matching (auto only — not in strict mode)
+    // Context matching — normalize hyphens/underscores, match individual words (auto only)
     if (!isMatch && mode !== "strict") {
-      const context = getContext(rule).toLowerCase();
-      if (context && queryLower.includes(context)) {
-        isMatch = true;
+      const context = getContext(rule);
+      if (context) {
+        const ctxWords = context.replace(/[-_]/g, " ").toLowerCase().split(/\s+/);
+        const queryWords = new Set(
+          query.toLowerCase().replace(/[^\w\s]/g, " ").split(/\s+/),
+        );
+        isMatch = ctxWords.every((w) => w.length > 0 && queryWords.has(w));
       }
     }
 
@@ -147,11 +195,19 @@ function matchRules(
 
   // Lenient fallback: fuzzy word matching if nothing matched
   if (mode === "lenient" && matched.length === 0) {
-    const queryWords = queryLower.split(/\s+/).filter((w) => w.length > 3);
+    const queryWords = query
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
 
     for (const rule of rules) {
+      if (matched.length >= maxResults) break;
       const ruleId = rule.id || "unknown";
       if (seenIds.has(ruleId)) continue;
+
+      // Confidence gate
+      if (rule.confidence !== undefined && rule.confidence < minConfidence) continue;
 
       const ruleText = [
         getContext(rule),
@@ -177,7 +233,9 @@ function matchRules(
     }
   }
 
-  return matched;
+  // Sort by confidence descending
+  matched.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  return matched.slice(0, maxResults);
 }
 
 // ── Plugin Registration ───────────────────────────────────────────────
@@ -194,9 +252,10 @@ const correlationMemoryPlugin = {
     api.registerTool(
       (ctx) => {
         // Resolve workspace path from SDK context
-        const workspacePath =
-          (api as any).config?.workspace ||
-          path.join(process.cwd(), ".openclaw/workspace");
+        const workspacePath = (api as any).config?.workspace as string;
+        if (!workspacePath) {
+          console.error("[correlation-memory] No workspace path configured via SDK");
+        }
 
         return [
           // ── Tool 1: memory_search_with_correlation ──
@@ -224,8 +283,18 @@ const correlationMemoryPlugin = {
                   type: "string",
                   enum: ["auto", "strict", "lenient"],
                   description:
-                    "Matching mode: auto (keyword + context), strict (exact keyword), lenient (fuzzy fallback)",
+                    "Matching mode: auto (keyword + context), strict (word-boundary keyword), lenient (fuzzy fallback)",
                   default: "auto",
+                },
+                min_confidence: {
+                  type: "number",
+                  description: "Minimum confidence threshold (0-1, default: 0)",
+                  default: 0,
+                },
+                max_results: {
+                  type: "number",
+                  description: "Maximum number of rules to return (default: 10)",
+                  default: 10,
                 },
               },
               required: ["query"],
@@ -234,11 +303,15 @@ const correlationMemoryPlugin = {
               query: string;
               auto_correlate?: boolean;
               correlation_mode?: "auto" | "strict" | "lenient";
+              min_confidence?: number;
+              max_results?: number;
             }) => {
               const {
                 query,
                 auto_correlate = true,
                 correlation_mode = "auto",
+                min_confidence = 0,
+                max_results = 10,
               } = params;
 
               const rules = loadCorrelationRules(workspacePath);
@@ -254,7 +327,7 @@ const correlationMemoryPlugin = {
               }
 
               const matched = auto_correlate
-                ? matchRules(rules, query, correlation_mode)
+                ? matchRules(rules, query, { mode: correlation_mode, minConfidence: min_confidence, maxResults: max_results })
                 : [];
 
               const allSearches = matched.flatMap((r) => r.additional_searches);
@@ -295,16 +368,28 @@ const correlationMemoryPlugin = {
                   description: "Matching mode",
                   default: "auto",
                 },
+                min_confidence: {
+                  type: "number",
+                  description: "Minimum confidence threshold (0-1, default: 0)",
+                  default: 0,
+                },
+                max_results: {
+                  type: "number",
+                  description: "Maximum rules to return (default: 10)",
+                  default: 10,
+                },
               },
               required: ["context"],
             },
             execute: async (params: {
               context: string;
               mode?: "auto" | "strict" | "lenient";
+              min_confidence?: number;
+              max_results?: number;
             }) => {
-              const { context, mode = "auto" } = params;
+              const { context, mode = "auto", min_confidence = 0, max_results = 10 } = params;
               const rules = loadCorrelationRules(workspacePath);
-              const matched = matchRules(rules, context, mode);
+              const matched = matchRules(rules, context, { mode, minConfidence: min_confidence, maxResults: max_results });
 
               return {
                 success: true,
