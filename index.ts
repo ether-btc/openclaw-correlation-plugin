@@ -15,7 +15,7 @@ import * as path from "path";
  * - This plugin does NOT make network requests (read-only local file ops)
  * - This plugin does NOT write to filesystem (read-only)
  * - This plugin does NOT handle credentials
- * - Workspace path is resolved via SDK config only (api.config?.workspace)
+ * - Workspace path resolved via ctx.workspaceDir (SDK runtime) with config/default fallbacks
  *
  * Audit: 2026-03-20 - Passed deep security review
  */
