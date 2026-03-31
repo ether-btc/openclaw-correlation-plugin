@@ -251,11 +251,11 @@ const correlationMemoryPlugin = {
   register(api: OpenClawPluginApi) {
     api.registerTool(
       (ctx) => {
-        // Resolve workspace path from SDK context
-        const workspacePath = (api as any).config?.workspace as string;
-        if (!workspacePath) {
-          console.error("[correlation-memory] No workspace path configured via SDK");
-        }
+        // Resolve workspace path — ctx.workspaceDir is set by the SDK runtime
+        const workspacePath =
+          ctx.workspaceDir ??
+          (api as any).config?.agents?.defaults?.workspace ??
+          '/home/pi/.openclaw/workspace';
 
         return [
           // ── Tool 1: memory_search_with_correlation ──
