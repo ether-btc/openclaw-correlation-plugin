@@ -77,7 +77,8 @@ function loadCorrelationRules(workspacePath: string): CorrelationRule[] {
     cachedMtime = stat.mtimeMs;
     return filtered;
   } catch (err) {
-    console.error(`[correlation-memory] Failed to load rules from ${rulesPath}: ${err}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[correlation-memory] Failed to load rules from ${rulesPath}: ${msg}`);
     return [];
   }
 }
@@ -128,6 +129,12 @@ function wordMatch(text: string, keyword: string): boolean {
   if (!re) {
     const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     re = new RegExp(`\\b${escaped}\\b`, "i");
+    // LRU eviction — prevent unbounded cache growth
+    const MAX_CACHE_SIZE = 500;
+    if (regexCache.size >= MAX_CACHE_SIZE) {
+      const firstKey = regexCache.keys().next().value;
+      regexCache.delete(firstKey);
+    }
     regexCache.set(keyword, re);
   }
   return re.test(text);
@@ -169,15 +176,17 @@ function matchRules(
       }
     }
 
-    // Context matching — normalize hyphens/underscores, match individual words (auto only)
+    // Context matching — normalize hyphens/underscores, partial word match (auto only)
     if (!isMatch && mode !== "strict") {
       const context = getContext(rule);
       if (context) {
-        const ctxWords = context.replace(/[-_]/g, " ").toLowerCase().split(/\s+/);
+        const ctxWords = context.replace(/[-_]/g, " ").toLowerCase().split(/\s+/).filter((w) => w.length > 0);
         const queryWords = new Set(
           query.toLowerCase().replace(/[^\w\s]/g, " ").split(/\s+/),
         );
-        isMatch = ctxWords.every((w) => w.length > 0 && queryWords.has(w));
+        const matchingWords = ctxWords.filter((w) => queryWords.has(w));
+        const coverage = ctxWords.length > 0 ? matchingWords.length / ctxWords.length : 0;
+        isMatch = matchingWords.length >= 2 || coverage >= 0.8;
       }
     }
 
@@ -233,8 +242,12 @@ function matchRules(
     }
   }
 
-  // Sort by confidence descending
-  matched.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  // Sort by confidence descending, then id ascending (stable tiebreak)
+  matched.sort((a, b) => {
+    const diff = (b.confidence ?? 0) - (a.confidence ?? 0);
+    if (diff !== 0) return diff;
+    return (a.id ?? "").localeCompare(b.id ?? "");
+  });
   return matched.slice(0, maxResults);
 }
 
@@ -314,6 +327,10 @@ const correlationMemoryPlugin = {
                 max_results = 10,
               } = params;
 
+              // Validate numeric params — prevent NaN or out-of-range values
+              const safeMaxResults = Math.max(1, Math.floor(max_results ?? 10));
+              const safeMinConfidence = Math.min(1, Math.max(0, min_confidence ?? 0));
+
               const rules = loadCorrelationRules(workspacePath);
 
               if (rules.length === 0) {
@@ -327,7 +344,7 @@ const correlationMemoryPlugin = {
               }
 
               const matched = auto_correlate
-                ? matchRules(rules, query, { mode: correlation_mode, minConfidence: min_confidence, maxResults: max_results })
+                ? matchRules(rules, query, { mode: correlation_mode, minConfidence: safeMinConfidence, maxResults: safeMaxResults })
                 : [];
 
               const allSearches = matched.flatMap((r) => r.additional_searches);
@@ -388,8 +405,13 @@ const correlationMemoryPlugin = {
               max_results?: number;
             }) => {
               const { context, mode = "auto", min_confidence = 0, max_results = 10 } = params;
+
+              // Validate numeric params
+              const safeMaxResults = Math.max(1, Math.floor(max_results ?? 10));
+              const safeMinConfidence = Math.min(1, Math.max(0, min_confidence ?? 0));
+
               const rules = loadCorrelationRules(workspacePath);
-              const matched = matchRules(rules, context, { mode, minConfidence: min_confidence, maxResults: max_results });
+              const matched = matchRules(rules, context, { mode, minConfidence: safeMinConfidence, maxResults: safeMaxResults });
 
               return {
                 success: true,
