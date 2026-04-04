@@ -207,6 +207,37 @@ Parameters:
 - `--keywords`: Additional keywords to consider
 - `--mode`: Matching mode (auto, strict, lenient)
 
+## Uninstallation
+
+### Via OpenClaw CLI (recommended)
+
+```bash
+openclaw plugins uninstall correlation-memory
+openclaw gateway restart
+```
+
+### Via Uninstall Script
+
+If the CLI is not available, use the bundled uninstall script:
+
+```bash
+cd ~/.openclaw/extensions/correlation-memory
+./uninstall.sh
+```
+
+Options:
+- `--force`: Skip confirmation prompt
+- Environment variable `OPENCLAW_CONFIG_PATH`: Override config location (default: `~/.openclaw/openclaw.json`)
+
+The uninstall script will:
+1. Find your OpenClaw config automatically
+2. Back up the config before modification
+3. Remove the `correlation-memory` entry from `plugins.entries`
+4. Verify removal succeeded
+5. Show backup location for recovery
+
+**Note:** Restart the gateway after uninstall: `openclaw gateway restart`
+
 ## Documentation
 
 Comprehensive documentation is available in the docs directory:
