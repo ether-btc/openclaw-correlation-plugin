@@ -39,7 +39,7 @@ interface MatchedRule {
   id: string | undefined;
   context: string | undefined;
   confidence: number | undefined;
-  relationship_type: string | undefined;
+  relationship_type?: string;
   additional_searches: string[];
 }
 
@@ -136,8 +136,32 @@ function wordMatch(text: string, keyword: string): boolean {
       regexCache.delete(firstKey);
     }
     regexCache.set(keyword, re);
+  } else {
+    // Cache hit — re-insert to update LRU ordering (move to end of Map insertion order)
+    regexCache.delete(keyword);
+    regexCache.set(keyword, re);
   }
   return re.test(text);
+}
+
+// ── Workspace Path Resolution ───────────────────────────────────────────
+
+interface OpenClawPluginApiExtended extends OpenClawPluginApi {
+  config?: {
+    agents?: {
+      defaults?: {
+        workspace?: string;
+      };
+    };
+  };
+}
+
+function resolveWorkspacePath(api: OpenClawPluginApi, ctx: { workspaceDir?: string }): string {
+  return (
+    ctx.workspaceDir ??
+    (api as OpenClawPluginApiExtended).config?.agents?.defaults?.workspace ??
+    '/home/pi/.openclaw/workspace'
+  );
 }
 
 // ── Matching Logic ────────────────────────────────────────────────────
@@ -265,10 +289,7 @@ const correlationMemoryPlugin = {
     api.registerTool(
       (ctx) => {
         // Resolve workspace path — ctx.workspaceDir is set by the SDK runtime
-        const workspacePath =
-          ctx.workspaceDir ??
-          (api as any).config?.agents?.defaults?.workspace ??
-          '/home/pi/.openclaw/workspace';
+        const workspacePath = resolveWorkspacePath(api, ctx);
 
         return [
           // ── Tool 1: memory_search_with_correlation ──

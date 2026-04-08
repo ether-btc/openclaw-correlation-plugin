@@ -4,7 +4,13 @@
   "private": true,
   "description": "Unified correlation-aware memory search plugin for OpenClaw",
   "type": "module",
-  "devDependencies": {},
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  },
   "peerDependencies": {
     "openclaw": ">=2026.1.26"
   },
