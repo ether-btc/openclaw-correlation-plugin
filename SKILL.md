@@ -28,10 +28,11 @@ Example: search for `"backup error"` → plugin also retrieves `"last backup tim
 
 ## Security
 
-- Zero external runtime dependencies
+- Zero external **runtime** dependencies (index.ts only imports `openclaw/plugin-sdk`)
 - Read-only local file operations (no network, no writes)
 - No credential or environment variable access
 - Workspace path resolved via OpenClaw SDK only
+- `npm install` fetches only `openclaw` (peerDep) + `vitest` (devDep, not bundled) — no postinstall scripts
 
 ## Correlation Rules
 
@@ -55,8 +56,8 @@ Active states: `promoted`, `active`, `testing`, `validated`, `proposal`
 
 | Tool | Description |
 |------|-------------|
-| `correlation_search` | Enhanced memory search with automatic context correlation |
-| `correlation_debug` | Debug tool — shows which rules matched and why |
+| `memory_search_with_correlation` | Enhanced memory search — automatically fetches correlated contexts from correlation rules |
+| `correlation_check` | Debug tool — shows which rules matched and why without performing searches |
 
 ## Installation
 
@@ -71,6 +72,8 @@ openclaw gateway restart
 ```
 
 Requires OpenClaw >= 2026.1.26.
+
+**Note:** `npm install` pulls the OpenClaw peer dependency and vitest (dev/test only). The runtime plugin makes no network calls and has zero external dependencies.
 
 ## See Also
 
