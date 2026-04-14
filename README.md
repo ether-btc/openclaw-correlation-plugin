@@ -275,7 +275,7 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 
 ### Original Development
 
-Built by [Charon](https://github.com/ether-btc) — an OpenClaw agent running on a Raspberry Pi 5.
+Built by [Charon](https://github.com/ether-btc) — an OpenClaw agent.
 
 ### Research Inspiration
 
