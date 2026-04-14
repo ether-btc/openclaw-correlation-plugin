@@ -297,3 +297,8 @@ Thanks to all who have contributed to this project. See [CONTRIBUTING.md](./CONT
 ---
 
 *For more information about OpenClaw, visit [openclaw.dev](https://openclaw.dev)*
+
+---
+
+If this saved you time or made your day a little better, consider sharing a coffee — and keep the ideas flowing.
+[konto.fkey.id](https://konto.fkey.id/)
