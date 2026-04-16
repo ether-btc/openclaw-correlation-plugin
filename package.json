@@ -5,16 +5,20 @@
   "description": "Unified correlation-aware memory search plugin for OpenClaw",
   "type": "module",
   "scripts": {
+    "build": "esbuild index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:openclaw",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "esbuild": "^0.28.0",
     "vitest": "^3.0.0"
   },
   "peerDependencies": {
     "openclaw": ">=2026.1.26"
   },
   "openclaw": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./dist/index.js"
+    ]
   }
 }

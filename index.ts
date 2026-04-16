@@ -282,7 +282,6 @@ const correlationMemoryPlugin = {
   name: "Correlation Memory Search",
   description:
     "Correlation-aware memory search — automatic decision-context retrieval with keyword matching, confidence filtering, and rule lifecycle management",
-  kind: "memory",
   configSchema: emptyPluginConfigSchema(),
 
   register(api: OpenClawPluginApi) {
