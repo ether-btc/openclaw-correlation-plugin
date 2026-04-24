@@ -68,7 +68,14 @@ function loadCorrelationRules(workspacePath: string): CorrelationRule[] {
     // Filter to active rules only
     const filtered = rules.filter((rule) => {
       if (!rule.id) return false;
-      if (rule.confidence !== undefined && rule.confidence <= 0) return false;
+
+      // Confidence gate — filter out NaN, zero, and negative confidence
+      if (rule.confidence !== undefined) {
+        if (isNaN(rule.confidence) || rule.confidence <= 0) {
+          return false;
+        }
+      }
+
       const state = rule.lifecycle?.state;
       return !state || ACTIVE_STATES.has(state);
     });
@@ -121,6 +128,9 @@ function getAdditionalSearches(rule: CorrelationRule): string[] {
 const regexCache = new Map<string, RegExp>();
 
 function wordMatch(text: string, keyword: string): boolean {
+  // Reject empty/whitespace-only keywords to prevent false positive matches
+  if (!keyword.trim()) return false;
+
   // Multi-word keywords: all words must be present (word-boundary each)
   if (keyword.includes(" ")) {
     return keyword.split(/\s+/).every((word) => wordMatch(text, word));
@@ -186,8 +196,12 @@ function matchRules(
     const ruleId = rule.id || "unknown";
     if (seenIds.has(ruleId)) continue;
 
-    // Confidence gate
-    if (rule.confidence !== undefined && rule.confidence < minConfidence) continue;
+    // Confidence gate — filter out NaN, zero, and negative confidence
+    if (rule.confidence !== undefined) {
+      if (isNaN(rule.confidence) || rule.confidence < minConfidence) {
+        continue;
+      }
+    }
 
     let isMatch = false;
 
@@ -239,8 +253,12 @@ function matchRules(
       const ruleId = rule.id || "unknown";
       if (seenIds.has(ruleId)) continue;
 
-      // Confidence gate
-      if (rule.confidence !== undefined && rule.confidence < minConfidence) continue;
+      // Confidence gate — filter out NaN, zero, and negative confidence
+      if (rule.confidence !== undefined) {
+        if (isNaN(rule.confidence) || rule.confidence < minConfidence) {
+          continue;
+        }
+      }
 
       const ruleText = [
         getContext(rule),
@@ -348,8 +366,12 @@ const correlationMemoryPlugin = {
               } = params;
 
               // Validate numeric params — prevent NaN or out-of-range values
-              const safeMaxResults = Math.max(1, Math.floor(max_results ?? 10));
-              const safeMinConfidence = Math.min(1, Math.max(0, min_confidence ?? 0));
+              const safeMaxResults = Math.max(1, Math.floor(
+                isNaN(max_results) ? 10 : max_results
+              ));
+              const safeMinConfidence = Math.min(1, Math.max(0,
+                isNaN(min_confidence) ? 0 : min_confidence ?? 0
+              ));
 
               const rules = loadCorrelationRules(workspacePath);
 
@@ -427,8 +449,12 @@ const correlationMemoryPlugin = {
               const { context, mode = "auto", min_confidence = 0, max_results = 10 } = params;
 
               // Validate numeric params
-              const safeMaxResults = Math.max(1, Math.floor(max_results ?? 10));
-              const safeMinConfidence = Math.min(1, Math.max(0, min_confidence ?? 0));
+              const safeMaxResults = Math.max(1, Math.floor(
+                isNaN(max_results) ? 10 : max_results
+              ));
+              const safeMinConfidence = Math.min(1, Math.max(0,
+                isNaN(min_confidence) ? 0 : min_confidence ?? 0
+              ));
 
               const rules = loadCorrelationRules(workspacePath);
               const matched = matchRules(rules, context, { mode, minConfidence: safeMinConfidence, maxResults: safeMaxResults });

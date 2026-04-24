@@ -27,6 +27,9 @@ const regexCache = new Map<string, RegExp>();
 const MAX_CACHE_SIZE = 500;
 
 function wordMatch(text: string, keyword: string): boolean {
+  // Reject empty/whitespace-only keywords to prevent false positive matches
+  if (!keyword.trim()) return false;
+
   if (keyword.includes(" ")) {
     return keyword.split(/\s+/).every((word) => wordMatch(text, word));
   }
@@ -77,7 +80,7 @@ describe("wordMatch", () => {
   });
 
   it("handles empty keyword", () => {
-    expect(wordMatch("some text", "")).toBe(true); // empty keyword splits to [""], every([]) === true
+    expect(wordMatch("some text", "")).toBe(false); // Empty keywords should NOT match
   });
 
   it("LRU cache — evicts oldest entry when full", () => {
@@ -237,7 +240,18 @@ function matchRules(
     if (matched.length >= maxResults) break;
     const ruleId = rule.id || "unknown";
     if (seenIds.has(ruleId)) continue;
+
+    // Confidence gate — filter out NaN, zero, and negative confidence
+    if (rule.confidence !== undefined) {
+      if (isNaN(rule.confidence) || rule.confidence <= 0) {
+        continue;
+      }
+    }
     if (rule.confidence !== undefined && rule.confidence < minConfidence) continue;
+
+    // Lifecycle state filter — only active states match
+    const state = rule.lifecycle?.state;
+    if (state && !ACTIVE_STATES.has(state)) continue;
 
     let isMatch = false;
     const keywords = getKeywords(rule);
@@ -274,7 +288,18 @@ function matchRules(
       if (matched.length >= maxResults) break;
       const ruleId = rule.id || "unknown";
       if (seenIds.has(ruleId)) continue;
+
+      // Confidence gate — filter out NaN, zero, and negative confidence
+      if (rule.confidence !== undefined) {
+        if (isNaN(rule.confidence) || rule.confidence <= 0) {
+          continue;
+        }
+      }
       if (rule.confidence !== undefined && rule.confidence < minConfidence) continue;
+
+      // Lifecycle state filter
+      const state = rule.lifecycle?.state;
+      if (state && !ACTIVE_STATES.has(state)) continue;
       const ruleText = [rule.trigger_context || rule.context || "", ...getKeywords(rule), ...getAdditionalSearches(rule)].join(" ").toLowerCase();
       for (const word of queryWords) {
         if (ruleText.includes(word)) {
@@ -349,8 +374,8 @@ describe("matchRules", () => {
   it("strict mode — context-only match does NOT fire", () => {
     const results = matchRules(rules, "modify settings", { mode: "strict", maxResults: 10 });
     // "settings" is context match for cr-001 but no keyword matches "settings"
-    // keywords: config, setting, change — "setting" matches "setting" with word boundary
-    expect(results.some((r) => r.id === "cr-001")).toBe(true);
+    // keywords: config, setting, change — "settings" does NOT match "setting" with word boundary
+    expect(results.some((r) => r.id === "cr-001")).toBe(false);
   });
 
   it("auto mode — falls back to context coverage when keywords don't match", () => {
@@ -405,8 +430,11 @@ describe("matchRules", () => {
   });
 
   it("respects minConfidence threshold", () => {
+    // Query "error" matches cr-002 (confidence 0.85)
+    // But minConfidence is 0.90, so cr-002 should be filtered out
+    // cr-001 has 0.95 but doesn't match "error" (keywords: config, setting, change)
     const results = matchRules(rules, "error", { mode: "strict", minConfidence: 0.90, maxResults: 10 });
-    expect(results.map((r) => r.id)).toEqual(["cr-001"]); // only cr-001 has confidence >= 0.90
+    expect(results.map((r) => r.id)).toEqual([]); // no rules pass the minConfidence filter
   });
 
   it("returns empty array when nothing matches", () => {
