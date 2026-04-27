@@ -5,7 +5,7 @@
   "description": "Unified correlation-aware memory search plugin for OpenClaw",
   "type": "module",
   "scripts": {
-    "build": "esbuild index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:openclaw",
+    "build": "esbuild scripts/correlation-memory.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:openclaw",
     "test": "vitest run",
     "test:watch": "vitest"
   },
