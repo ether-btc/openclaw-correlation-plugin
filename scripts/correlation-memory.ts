@@ -69,11 +69,12 @@ function loadCorrelationRules(workspacePath: string): CorrelationRule[] {
     const filtered = rules.filter((rule) => {
       if (!rule.id) return false;
 
-      // Confidence gate — filter out NaN, zero, and negative confidence
-      if (rule.confidence !== undefined) {
-        if (isNaN(rule.confidence) || rule.confidence <= 0) {
-          return false;
-        }
+      // Confidence gate — filter out NaN, zero, negative, and undefined confidence.
+      // Match loadCorrelationRules behavior with matchRules: undefined confidence is treated
+      // as "no confidence specified" and passes the load filter but is filtered here
+      // (equivalent to confidence < minConfidence since undefined < any minConfidence is true).
+      if (rule.confidence !== undefined && (isNaN(rule.confidence) || rule.confidence <= 0)) {
+        return false;
       }
 
       const state = rule.lifecycle?.state;
@@ -127,6 +128,9 @@ function getAdditionalSearches(rule: CorrelationRule): string[] {
 
 const regexCache = new Map<string, RegExp>();
 
+// ReDoS protection: maximum keyword length before escaping (prevents pathological patterns)
+const MAX_KEYWORD_LEN = 100;
+
 function wordMatch(text: string, keyword: string): boolean {
   // Reject empty/whitespace-only keywords to prevent false positive matches
   if (!keyword.trim()) return false;
@@ -135,10 +139,24 @@ function wordMatch(text: string, keyword: string): boolean {
   if (keyword.includes(" ")) {
     return keyword.split(/\s+/).every((word) => wordMatch(text, word));
   }
+
+  // SECURITY: For simple alphanumeric keywords, use O(n*m) String.includes()
+  // instead of regex to prevent ReDoS from pathological patterns in untrusted rules.
+  // Only use regex for keywords containing special regex metacharacters.
+  const SIMPLE_RE = /^[a-zA-Z0-9]+$/;
+  if (SIMPLE_RE.test(keyword) && keyword.length <= MAX_KEYWORD_LEN) {
+    return text.toLowerCase().includes(keyword.toLowerCase());
+  }
+
   let re = regexCache.get(keyword);
   if (!re) {
+    // Reject keywords that would produce pathological regex after escaping
+    if (keyword.length > MAX_KEYWORD_LEN) {
+      console.warn(`[correlation-memory] Keyword too long, skipping: ${keyword.slice(0, 20)}...`);
+      return false;
+    }
     const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    re = new RegExp(`\\b${escaped}\\b`, "i");
+    re = new RegExp(`\\b${escaped}\\b`, "iu"); // 'i' + 'u' flags: case-insensitive + Unicode
     // LRU eviction — prevent unbounded cache growth
     const MAX_CACHE_SIZE = 500;
     if (regexCache.size >= MAX_CACHE_SIZE) {
@@ -156,22 +174,11 @@ function wordMatch(text: string, keyword: string): boolean {
 
 // ── Workspace Path Resolution ───────────────────────────────────────────
 
-interface OpenClawPluginApiExtended extends OpenClawPluginApi {
-  config?: {
-    agents?: {
-      defaults?: {
-        workspace?: string;
-      };
-    };
-  };
-}
-
 function resolveWorkspacePath(api: OpenClawPluginApi, ctx: { workspaceDir?: string }): string {
-  return (
-    ctx.workspaceDir ??
-    (api as OpenClawPluginApiExtended).config?.agents?.defaults?.workspace ??
-    '/home/pi/.openclaw/workspace'
-  );
+  // SECURITY: Only trust ctx.workspaceDir (SDK-provided) and a hardcoded safe default.
+  // Removed config-agent fallback — an attacker controlling the API config could redirect
+  // rule loading to an attacker-controlled file, enabling rule injection or ReDoS attacks.
+  return ctx.workspaceDir ?? '/home/pi/.openclaw/workspace';
 }
 
 // ── Matching Logic ────────────────────────────────────────────────────
@@ -365,10 +372,10 @@ const correlationMemoryPlugin = {
                 max_results = 10,
               } = params;
 
-              // Validate numeric params — prevent NaN or out-of-range values
-              const safeMaxResults = Math.max(1, Math.floor(
+              // Validate numeric params — prevent NaN, out-of-range, or excessively large values
+              const safeMaxResults = Math.min(1000, Math.max(1, Math.floor(
                 isNaN(max_results) ? 10 : max_results
-              ));
+              )));
               const safeMinConfidence = Math.min(1, Math.max(0,
                 isNaN(min_confidence) ? 0 : min_confidence ?? 0
               ));
@@ -448,10 +455,10 @@ const correlationMemoryPlugin = {
             }) => {
               const { context, mode = "auto", min_confidence = 0, max_results = 10 } = params;
 
-              // Validate numeric params
-              const safeMaxResults = Math.max(1, Math.floor(
+              // Validate numeric params — prevent NaN, out-of-range, or excessively large values
+              const safeMaxResults = Math.min(1000, Math.max(1, Math.floor(
                 isNaN(max_results) ? 10 : max_results
-              ));
+              )));
               const safeMinConfidence = Math.min(1, Math.max(0,
                 isNaN(min_confidence) ? 0 : min_confidence ?? 0
               ));
