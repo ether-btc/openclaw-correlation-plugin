@@ -1,0 +1,59 @@
+name: Test Skill
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check SKILL.md exists
+        run: |
+          if [ ! -f SKILL.md ]; then
+            echo "Error: SKILL.md not found"
+            exit 1
+          fi
+
+      - name: Check dependencies.yaml exists
+        run: |
+          if [ ! -f dependencies.yaml ]; then
+            echo "Error: dependencies.yaml not found"
+            exit 1
+          fi
+
+      - name: Validate YAML syntax
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('dependencies.yaml'))"
+          python3 -c "import yaml; yaml.safe_load(open('SKILL.md'))"
+
+      - name: Validate frontmatter has name and description
+        run: |
+          python3 << 'PYEOF'
+          import yaml
+          import re
+          
+          with open('SKILL.md', 'r') as f:
+              content = f.read()
+          
+          match = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
+          if not match:
+              print("Error: No frontmatter found in SKILL.md")
+              exit(1)
+          
+          frontmatter = yaml.safe_load(match.group(1))
+          
+          if 'name' not in frontmatter:
+              print("Error: 'name' not found in frontmatter")
+              exit(1)
+          
+          if 'description' not in frontmatter:
+              print("Error: 'description' not found in frontmatter")
+              exit(1)
+          
+          print("All validations passed!")
+          PYEOF
