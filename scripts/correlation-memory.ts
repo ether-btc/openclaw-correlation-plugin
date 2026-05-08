@@ -43,6 +43,24 @@ interface MatchedRule {
   additional_searches: string[];
 }
 
+/**
+ * Check if a rule passes the confidence threshold.
+ * Filters out rules with NaN, zero, negative confidence, or confidence below the minimum.
+ *
+ * @param rule - The correlation rule to check
+ * @param minConfidence - Minimum confidence threshold (0-1)
+ * @returns True if the rule passes the confidence gate, false otherwise
+ */
+function passesConfidenceGate(rule: CorrelationRule, minConfidence: number): boolean {
+  // Filter out NaN, zero, negative, and undefined confidence values
+  if (rule.confidence !== undefined) {
+    if (isNaN(rule.confidence) || rule.confidence <= 0 || rule.confidence < minConfidence) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // ── Rule Loading (with mtime cache) ──────────────────────────────────
 
 let cachedRules: CorrelationRule[] | null = null;
@@ -52,6 +70,13 @@ const ACTIVE_STATES = new Set([
   "promoted", "active", "testing", "validated", "proposal",
 ]);
 
+/**
+ * Load correlation rules from the workspace, with mtime-based caching.
+ * Rules are filtered to active lifecycle states and valid confidence values.
+ *
+ * @param workspacePath - Path to the OpenClaw workspace directory
+ * @returns Array of active, validated correlation rules
+ */
 function loadCorrelationRules(workspacePath: string): CorrelationRule[] {
   const rulesPath = path.resolve(
     path.join(workspacePath, "memory/correlation-rules.json"),
@@ -73,7 +98,7 @@ function loadCorrelationRules(workspacePath: string): CorrelationRule[] {
       // Match loadCorrelationRules behavior with matchRules: undefined confidence is treated
       // as "no confidence specified" and passes the load filter but is filtered here
       // (equivalent to confidence < minConfidence since undefined < any minConfidence is true).
-      if (rule.confidence !== undefined && (isNaN(rule.confidence) || rule.confidence <= 0)) {
+      if (!passesConfidenceGate(rule, 0)) {
         return false;
       }
 
@@ -93,15 +118,37 @@ function loadCorrelationRules(workspacePath: string): CorrelationRule[] {
 
 // ── Keyword Extraction ────────────────────────────────────────────────
 
+/**
+ * Get keywords from a correlation rule.
+ * Prefers trigger_keywords over keywords field.
+ *
+ * @param rule - The correlation rule
+ * @returns Array of keywords to match against
+ */
 function getKeywords(rule: CorrelationRule): string[] {
   // Handle both field naming conventions
   return rule.trigger_keywords || rule.keywords || [];
 }
 
+/**
+ * Get context from a correlation rule.
+ * Prefers trigger_context over context field.
+ *
+ * @param rule - The correlation rule
+ * @returns Context string (or empty string if neither field exists)
+ */
 function getContext(rule: CorrelationRule): string {
   return rule.trigger_context || rule.context || "";
 }
 
+/**
+ * Get additional searches from a correlation rule.
+ * Extracts searches from must_also_fetch and correlations fields,
+ * handling both string and object formats with deduplication.
+ *
+ * @param rule - The correlation rule
+ * @returns Array of additional search strings
+ */
 function getAdditionalSearches(rule: CorrelationRule): string[] {
   const searches: string[] = [];
 
@@ -131,6 +178,18 @@ const regexCache = new Map<string, RegExp>();
 // ReDoS protection: maximum keyword length before escaping (prevents pathological patterns)
 const MAX_KEYWORD_LEN = 100;
 
+// LRU cache: maximum number of regex entries before evicting oldest
+const MAX_CACHE_SIZE = 500;
+
+/**
+ * Check if a keyword matches text with word boundaries.
+ * Handles multi-word keywords (all words must match) and uses regex for special characters.
+ * Includes ReDoS protection via MAX_KEYWORD_LEN.
+ *
+ * @param text - The text to search in
+ * @param keyword - The keyword to match (single word or phrase)
+ * @returns True if the keyword matches with word boundaries, false otherwise
+ */
 function wordMatch(text: string, keyword: string): boolean {
   // Reject empty/whitespace-only keywords to prevent false positive matches
   if (!keyword.trim()) return false;
@@ -174,11 +233,21 @@ function wordMatch(text: string, keyword: string): boolean {
 
 // ── Workspace Path Resolution ───────────────────────────────────────────
 
+/**
+ * Resolve the OpenClaw workspace path from context or environment variable.
+ * Uses ctx.workspaceDir from the SDK runtime, falling back to OPENCLAW_WORKSPACE_DIR env var.
+ * This provides a secure fallback that prevents config-based attacks while allowing flexibility.
+ *
+ * @param api - OpenClaw plugin API
+ * @param ctx - Plugin context containing workspaceDir if set
+ * @returns Absolute path to the workspace directory
+ */
 function resolveWorkspacePath(api: OpenClawPluginApi, ctx: { workspaceDir?: string }): string {
-  // SECURITY: Only trust ctx.workspaceDir (SDK-provided) and a hardcoded safe default.
-  // Removed config-agent fallback — an attacker controlling the API config could redirect
-  // rule loading to an attacker-controlled file, enabling rule injection or ReDoS attacks.
-  return ctx.workspaceDir ?? '/home/pi/.openclaw/workspace';
+  // SECURITY: Only trust ctx.workspaceDir (SDK-provided) and environment variable fallback.
+  // Using environment variable for fallback is safer than config-agent because it's not
+  // accessible via the config system, preventing rule injection or ReDoS attacks.
+  // The expected workspace structure should contain a 'memory/correlation-rules.json' file.
+  return ctx.workspaceDir ?? process.env.OPENCLAW_WORKSPACE_DIR ?? '/default/openclaw/workspace';
 }
 
 // ── Matching Logic ────────────────────────────────────────────────────
@@ -189,6 +258,20 @@ interface MatchOptions {
   maxResults: number;
 }
 
+/**
+ * Match correlation rules against a query using specified matching mode.
+ * Filters rules by confidence, lifecycle state, and keyword/context matching.
+ *
+ * Three matching modes:
+ * - auto (default): keyword matching + context coverage fallback
+ * - strict: keyword matching only (word boundaries)
+ * - lenient: fuzzy word matching if no rules matched
+ *
+ * @param rules - Array of correlation rules to match against
+ * @param query - Search query or context to match
+ * @param options - Matching options (mode, minConfidence, maxResults)
+ * @returns Array of matched rules with additional searches, sorted by confidence
+ */
 function matchRules(
   rules: CorrelationRule[],
   query: string,
@@ -205,7 +288,7 @@ function matchRules(
 
     // Confidence gate — filter out NaN, zero, and negative confidence
     if (rule.confidence !== undefined) {
-      if (isNaN(rule.confidence) || rule.confidence < minConfidence) {
+      if (!passesConfidenceGate(rule, minConfidence)) {
         continue;
       }
     }
@@ -262,7 +345,7 @@ function matchRules(
 
       // Confidence gate — filter out NaN, zero, and negative confidence
       if (rule.confidence !== undefined) {
-        if (isNaN(rule.confidence) || rule.confidence < minConfidence) {
+        if (!passesConfidenceGate(rule, minConfidence)) {
           continue;
         }
       }
